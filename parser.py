@@ -23,12 +23,14 @@ async def parse_sticker_sets(channel):
                 for sticker in stickers.documents:
                     try:
                         sticker_path = bot.get_file(telethon.utils.pack_bot_file_id(sticker))
-                        path = f'{os.getcwd()}/sets/{stickers.set.title.replace(" ", "_").lower()}/' \
+                        path = f'{os.getcwd()}/stickers/{stickers.set.title.replace(" ", "_").lower()}/' \
                                f'{sticker_path.file_path.split("/")[1]}'
                         await client.download_file(sticker, path)
-                        data = [stickers.set.title, stickers.set.short_name, path,
+                        data = [stickers.set.title, stickers.set.short_name,
+                                f'/stickers/{stickers.set.title.replace(" ", "_").lower()}'
+                                f'/{sticker_path.file_path.split("/")[1]}',
                                 sticker.attributes[1].alt,
-                                sticker.id,
+                                sticker_path.file_path.split("/")[1],
                                 f'tg://addstickers?set={stickers.set.short_name}']
                         writer = csv.writer(file, delimiter=';')
                         writer.writerow(data)
@@ -56,5 +58,6 @@ if __name__ == '__main__':
     client.start()
     with client:
         client.loop.run_until_complete(main())
-        user = client.get_entity('@grekov')
-        client.send_message(user, 'Парсинг закончился!')
+        me = client.get_me()
+        client.send_message(me, 'Парсинг закончился!')
+
