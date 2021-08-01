@@ -1,3 +1,4 @@
+import asyncio
 import configparser
 import csv
 import json
@@ -15,37 +16,42 @@ async def parse_sticker_sets(channel):
     async for message in client.iter_messages(channel, reverse=True):
         if message.sticker is None:
             continue
-        try:
-            stickers = await client(GetStickerSetRequest(
-                stickerset=message.sticker.attributes[1].stickerset)
-            )
-            with open('stickers.csv', 'a+', encoding='utf-8') as file:
-                for sticker in stickers.documents:
-                    try:
-                        sticker_path = bot.get_file(telethon.utils.pack_bot_file_id(sticker))
-                        path = f'{os.getcwd()}/stickers/{stickers.set.title.replace(" ", "_").lower()}/' \
-                               f'{sticker_path.file_path.split("/")[1]}'
-                        await client.download_file(sticker, path)
-                        data = [stickers.set.title, stickers.set.short_name,
-                                f'/stickers/{stickers.set.title.replace(" ", "_").lower()}'
-                                f'/{sticker_path.file_path.split("/")[1]}',
-                                sticker.attributes[1].alt,
-                                sticker_path.file_path.split("/")[1],
-                                f'tg://addstickers?set={stickers.set.short_name}']
-                        writer = csv.writer(file, delimiter=';')
-                        writer.writerow(data)
-                    except Exception as exc:
-                        print(exc)
-                        continue
-        except Exception as exc:
-            print(exc)
+        stickers = await client(GetStickerSetRequest(
+            stickerset=message.sticker.attributes[1].stickerset)
+        )
+        with open('stickers.csv', 'a+', encoding='utf-8') as file:
+            try:
+                os.mkdir(os.getcwd() + f'/stickers/{stickers.set.title.replace(" ", "_").lower()}')
+            except:
+                pass
+            for sticker in stickers.documents:
+                try:
+                    sticker_path = bot.get_file(telethon.utils.pack_bot_file_id(sticker))
+                    downloaded_file = bot.download_file(sticker_path.file_path)
+                    file_path = f'/stickers/{stickers.set.title.replace(" ", "_").lower()}/' \
+                                f'{sticker_path.file_path.split("/")[1]}'
+                    if sticker.mime_type == 'image/webp' and '.webp' not in file_path:
+                        file_path += ".webp"
+                    elif sticker.mime_type == 'application/x-tgsticker' and '.tgs' not in file_path:
+                        file_path += '.tgs'
+                    else:
+                        pass
+                    with open(os.getcwd() + file_path, 'wb') as new_file:
+                        new_file.write(downloaded_file)
+                    data = [stickers.set.title, stickers.set.short_name,
+                            file_path,
+                            sticker.attributes[1].alt,
+                            file_path.split("/")[-1],
+                            f'tg://addstickers?set={stickers.set.short_name}']
+                    writer = csv.writer(file, delimiter=';')
+                    writer.writerow(data)
+                    await asyncio.sleep(0.1)
+                except Exception as exc:
+                    print(exc)
+                    continue
 
 
-async def main():
-    chats = json.load(open('list_chats.json', 'r'))['chats']
-    for chat in chats:
-        channel = await client.get_entity(chat)
-        await parse_sticker_sets(channel)
+# async def main():
 
 
 if __name__ == '__main__':
@@ -57,7 +63,16 @@ if __name__ == '__main__':
     client = TelegramClient(username, api_id, api_hash)
     client.start()
     with client:
-        client.loop.run_until_complete(main())
+        chats = json.load(open('list_chats.json', 'r'))['chats']
+        ioloop = asyncio.get_event_loop()
+        tasks = []
+        for chat in chats:
+            channel = client.get_entity(chat)
+            tasks.append(parse_sticker_sets(channel))
+            # await asyncio.gather(parse_sticker_sets(channel))
+            # threading.Thread(target=parse_sticker_sets, args=(channel,)).start()
+        ioloop.run_until_complete(asyncio.wait(tasks))
+        ioloop.close()
         me = client.get_me()
         client.send_message(me, 'Парсинг закончился!')
 
