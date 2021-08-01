@@ -52,13 +52,6 @@ async def parse_sticker_sets(channel):
                     continue
 
 
-async def main():
-    chats = json.load(open('list_chats.json', 'r'))['chats']
-    for chat in chats:
-        channel = await client.get_entity(chat)
-        await parse_sticker_sets(channel)
-
-
 if __name__ == '__main__':
     try:
         os.mkdir(os.getcwd() + '/stickers')
@@ -73,6 +66,13 @@ if __name__ == '__main__':
     client.flood_sleep_threshold = 1
     client.start()
     with client:
-        client.loop.run_until_complete(main())
+        chats = json.load(open('list_chats.json', 'r'))['chats']
+        tasks = []
+        for i in range(6):
+            for _ in range(5):
+                channel = client.get_entity(chats[_])
+                tasks.append(parse_sticker_sets(channel))
+            client.loop.run_until_complete(asyncio.wait(tasks))
+        client.loop.close()
         me = client.get_me()
         client.send_message(me, 'Парсинг закончился!')
