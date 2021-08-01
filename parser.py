@@ -22,7 +22,7 @@ async def parse_sticker_sets(channel):
         )
         with open('stickers.csv', 'a+', encoding='utf-8') as file:
             try:
-                os.mkdir(os.getcwd() + f'/stickers/{stickers.set.title.replace(" ", "_").lower()}')
+                os.mkdir(os.getcwd() + f'/stickers/{stickers.set.short_name.replace(" ", "_").lower()}')
             except:
                 pass
             for sticker in stickers.documents:
@@ -76,4 +76,3 @@ if __name__ == '__main__':
         client.loop.run_until_complete(main())
         me = client.get_me()
         client.send_message(me, 'Парсинг закончился!')
-
