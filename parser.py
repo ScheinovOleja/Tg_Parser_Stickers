@@ -5,6 +5,7 @@ import json
 import os
 
 import telethon
+from telethon.errors import FloodWaitError
 from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetStickerSetRequest
 from telebot import *
@@ -28,7 +29,7 @@ async def parse_sticker_sets(channel):
                 try:
                     sticker_path = bot.get_file(telethon.utils.pack_bot_file_id(sticker))
                     downloaded_file = bot.download_file(sticker_path.file_path)
-                    file_path = f'/stickers/{stickers.set.title.replace(" ", "_").lower()}/' \
+                    file_path = f'/stickers/{stickers.set.short_name.replace(" ", "_").lower()}/' \
                                 f'{sticker_path.file_path.split("/")[1]}'
                     if sticker.mime_type == 'image/webp' and '.webp' not in file_path:
                         file_path += ".webp"
@@ -51,7 +52,11 @@ async def parse_sticker_sets(channel):
                     continue
 
 
-# async def main():
+async def main():
+    chats = json.load(open('list_chats.json', 'r'))['chats']
+    for chat in chats:
+        channel = await client.get_entity(chat)
+        await parse_sticker_sets(channel)
 
 
 if __name__ == '__main__':
@@ -61,18 +66,10 @@ if __name__ == '__main__':
     api_hash = config['Telegram']['api_hash']
     username = config['Telegram']['username']
     client = TelegramClient(username, api_id, api_hash)
+    client.flood_sleep_threshold = 1
     client.start()
     with client:
-        chats = json.load(open('list_chats.json', 'r'))['chats']
-        ioloop = asyncio.get_event_loop()
-        tasks = []
-        for chat in chats:
-            channel = client.get_entity(chat)
-            tasks.append(parse_sticker_sets(channel))
-            # await asyncio.gather(parse_sticker_sets(channel))
-            # threading.Thread(target=parse_sticker_sets, args=(channel,)).start()
-        ioloop.run_until_complete(asyncio.wait(tasks))
-        ioloop.close()
+        client.loop.run_until_complete(main())
         me = client.get_me()
         client.send_message(me, 'Парсинг закончился!')
 
