@@ -17,9 +17,12 @@ async def parse_sticker_sets(channel):
     async for message in client.iter_messages(channel, reverse=True):
         if message.sticker is None:
             continue
-        stickers = await client(GetStickerSetRequest(
-            stickerset=message.sticker.attributes[1].stickerset)
-        )
+        try:
+            stickers = await client(GetStickerSetRequest(
+                stickerset=message.sticker.attributes[1].stickerset)
+            )
+        except Exception as exc:
+            continue
         with open('stickers.csv', 'a+', encoding='utf-8') as file:
             try:
                 os.mkdir(os.getcwd() + f'/stickers/{stickers.set.short_name.replace(" ", "_").lower()}')
@@ -68,11 +71,9 @@ if __name__ == '__main__':
     with client:
         chats = json.load(open('list_chats.json', 'r'))['chats']
         tasks = []
-        for i in range(6):
-            for _ in range(5):
-                channel = client.get_entity(chats[_])
-                tasks.append(parse_sticker_sets(channel))
-            client.loop.run_until_complete(asyncio.wait(tasks))
+        for chat in chats:
+            channel = client.get_entity(chat)
+            parse_sticker_sets(channel)
         client.loop.close()
         me = client.get_me()
         client.send_message(me, 'Парсинг закончился!')
