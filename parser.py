@@ -3,14 +3,33 @@ import configparser
 import csv
 import json
 import os
-
+import peewee as pw
 import telethon
-from telethon.errors import FloodWaitError
 from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetStickerSetRequest
 from telebot import *
 
 bot = TeleBot('1753538352:AAGW-cAk2fAT4n5rzp5tnljZIeWa6mD9udo')
+database = pw.SqliteDatabase('database.db', pragmas={'foreign_keys': 4})
+
+
+class Table(pw.Model):
+    class Meta:
+        database = database
+
+
+class Packs(Table):
+    title = pw.CharField(max_length=200)
+    short_name = pw.CharField(max_length=200)
+    file_path = pw.CharField(max_length=200)
+    emoji = pw.CharField(max_length=10)
+    file_name = pw.CharField(max_length=100)
+    sticker_url = pw.CharField(max_length=200)
+
+
+database.connect()
+database.create_tables([Packs])
+database.close()
 
 
 async def parse_sticker_sets(channel):
@@ -23,7 +42,11 @@ async def parse_sticker_sets(channel):
             )
         except Exception as exc:
             continue
-        with open('stickers.csv', 'a+', encoding='utf-8') as file:
+        try:
+            test = Packs.get_or_none(title=stickers.set.title)
+        except Exception as exc:
+            test = None
+        if test is None:
             try:
                 os.mkdir(os.getcwd() + f'/stickers/{stickers.set.short_name.replace(" ", "_").lower()}')
             except:
@@ -42,24 +65,15 @@ async def parse_sticker_sets(channel):
                         pass
                     with open(os.getcwd() + file_path, 'wb') as new_file:
                         new_file.write(downloaded_file)
-                    data = [stickers.set.title, stickers.set.short_name,
-                            file_path,
-                            sticker.attributes[1].alt,
-                            file_path.split("/")[-1],
-                            f'tg://addstickers?set={stickers.set.short_name}']
-                    writer = csv.writer(file, delimiter=';')
-                    writer.writerow(data)
-                    await asyncio.sleep(0.1)
+                    Packs.create(title=stickers.set.title,
+                                 short_name=stickers.set.short_name,
+                                 file_path=file_path,
+                                 emoji=sticker.attributes[1].alt,
+                                 file_name=file_path.split("/")[-1],
+                                 sticker_url=f'tg://addstickers?set={stickers.set.short_name}').save()
                 except Exception as exc:
                     print(exc)
                     continue
-
-
-async def main():
-    chats = json.load(open('list_chats.json', 'r'))['chats']
-    for chat in chats:
-        channel = await client.get_entity(chat)
-        await parse_sticker_sets(channel)
 
 
 if __name__ == '__main__':
@@ -73,10 +87,18 @@ if __name__ == '__main__':
     api_hash = config['Telegram']['api_hash']
     username = config['Telegram']['username']
     client = TelegramClient(username, api_id, api_hash)
-    client.flood_sleep_threshold = 1
+    client.flood_sleep_threshold = 10
     client.start()
     with client:
-        client.loop.run_until_complete(main())
-        client.loop.close()
-        me = client.get_me()
-        client.send_message(me, 'Парсинг закончился!')
+        chats = json.load(open('list_chats.json', 'r'))['chats']
+        ioloop = asyncio.get_event_loop()
+        for i in range(4, 21, 4):
+            tasks = []
+            for j in range(i):
+                channel = client.get_entity(chats[j])
+                tasks.append(parse_sticker_sets(channel))
+                print(chats[j])
+            ioloop.run_until_complete(asyncio.gather(tasks[0], tasks[1], tasks[2], tasks[3]))
+        ioloop.close()
+        me = client.get_entity('@SchulerBane')
+        msg = client.send_message(me, 'Парсинг закончился!')
