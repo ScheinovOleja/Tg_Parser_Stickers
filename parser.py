@@ -1,6 +1,4 @@
-import asyncio
 import configparser
-import csv
 import json
 import os
 import peewee as pw
@@ -9,8 +7,8 @@ from telethon.sync import TelegramClient
 from telethon.tl.functions.messages import GetStickerSetRequest
 from telebot import *
 
-bot = TeleBot('1753538352:AAGW-cAk2fAT4n5rzp5tnljZIeWa6mD9udo')
-database = pw.SqliteDatabase('database.db', pragmas={'foreign_keys': 4})
+bot = TeleBot('your_token_bot')
+database = pw.SqliteDatabase('database_copy.db', pragmas={'foreign_keys': 4})
 
 
 class Table(pw.Model):
@@ -30,6 +28,49 @@ class Packs(Table):
 database.connect()
 database.create_tables([Packs])
 database.close()
+
+
+async def parse_sticker_sets_from_file():
+    sets = json.load(open('pop_packs.json', 'r'))['sets']
+    for item in sets:
+        try:
+            sticker_set = bot.get_sticker_set(item.split('?set=')[1])
+        except:
+            continue
+        try:
+            test = Packs.get_or_none(title=sticker_set.title)
+        except Exception as exc:
+            test = None
+        if test is None:
+            print(item)
+            try:
+                os.mkdir(os.getcwd() + f'/stickers/{sticker_set.title.replace(" ", "_").lower()}')
+            except:
+                pass
+            for sticker in sticker_set.stickers:
+                try:
+                    # sticker_path = bot.get_file(telethon.utils.pack_bot_file_id(sticker.file_id))
+                    sticker_path = bot.get_file(sticker.file_id)
+                    downloaded_file = bot.download_file(sticker_path.file_path)
+                    file_path = f'/stickers/{sticker_set.title.replace(" ", "_").lower()}/' \
+                                f'{sticker_path.file_path.split("/")[1]}'
+                    if not sticker_set.is_animated and '.webp' not in sticker_path.file_path:
+                        file_path += ".webp"
+                    elif sticker_set.is_animated and '.tgs' not in sticker_path.file_path:
+                        file_path += '.tgs'
+                    else:
+                        pass
+                    with open(os.getcwd() + file_path, 'wb') as new_file:
+                        new_file.write(downloaded_file)
+                    Packs.create(title=sticker_set.title,
+                                 short_name=sticker_set.name,
+                                 file_path=file_path,
+                                 emoji=sticker.emoji,
+                                 file_name=file_path.split("/")[-1],
+                                 sticker_url=item).save()
+                except Exception as exc:
+                    print(exc)
+                    continue
 
 
 async def parse_sticker_sets(channel):
@@ -90,15 +131,7 @@ if __name__ == '__main__':
     client.flood_sleep_threshold = 10
     client.start()
     with client:
-        chats = json.load(open('list_chats.json', 'r'))['chats']
-        ioloop = asyncio.get_event_loop()
-        for i in range(4, 21, 4):
-            tasks = []
-            for j in range(i):
-                channel = client.get_entity(chats[j])
-                tasks.append(parse_sticker_sets(channel))
-                print(chats[j])
-            ioloop.run_until_complete(asyncio.gather(tasks[0], tasks[1], tasks[2], tasks[3]))
-        ioloop.close()
+        client.loop.run_until_complete(parse_sticker_sets_from_file())
+        # client.loop.run_until_complete(parse_sticker_sets_from_file())
         me = client.get_entity('@SchulerBane')
         msg = client.send_message(me, 'Парсинг закончился!')
